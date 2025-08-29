@@ -1,0 +1,7 @@
+@"
+streamlit
+pandas
+numpy
+"@ | Set-Content requirements.txt
+
+Add-Content requirements.txt "`r`ntransformers`r`ntorch"
