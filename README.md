@@ -14,13 +14,15 @@ CommentSense is a comprehensive AI-powered system designed for analyzing YouTube
 
 ### Setup
 
-1. Clone or download the CommentSense repository
-2. Create and activate the conda environment
-3. Install dependencies as shown above ( pip install -r requirements.txt)
-4. Create folder 'results' and folder 'dataset'
-5. Prepare your comment datasets in CSV format ( comment1 ~ comment5 )
-6. Configure the system using the provided configuration files
-7. Run dashboard ( streamlit run streamlit_dashboard.py )
+1. Open VS Code terminal, clone CommentSense repository [git clone https://github.com/airpoh/team_scds.git]
+2. Create a virtual environment (venv) [python -m venv .venv]
+3. Activate the venv [.\.venv\Scripts\Activate.ps1]
+4. Tell VS Code to use this venv (Ctrl+Shift+P → Python: Select Interpreter) [.venv\Scripts\python.exe]
+5. Install dependencies [python -m pip install --upgrade pip, python -m pip install -r requirements.txt]
+6. Create folder 'results' and folder 'dataset' in team_scds
+7. Prepare your comment datasets in CSV format ( comment1 ~ comment5 )
+8. Configure the system using the provided configuration files
+9. Run dashboard [streamlit run streamlit_dashboard.py]
 
 ## Overview
 
