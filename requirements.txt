@@ -26,12 +26,6 @@ hdbscan>=0.8.29
 # Efficient string matching (optional but recommended)
 pyahocorasick>=2.0.0
 
-# Advanced ML libraries
-xgboost>=1.7.0
-lightgbm>=4.0.0
-shap>=0.41.0
-datasketch>=1.6.0
-
 # Web framework and visualization
 streamlit>=1.25.0
 plotly>=5.15.0
@@ -54,11 +48,17 @@ requests>=2.31.0  # << added (used in visual_emoji_analysis)
 
 # Progress bars and utilities
 tqdm>=4.65.0
-joblib>=1.3.0
 
 # Development and testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
+
+# Advanced ML libraries
+datasketch>=1.6.0
+xgboost>=1.7.0
+lightgbm>=3.3.0
+shap>=0.41.0
+joblib>=1.3.0
 
 # Optional: for production deployment
 gunicorn>=20.1.0
@@ -66,4 +66,3 @@ uvicorn>=0.23.0
 fastapi>=0.100.0
 
 ftfy>=6.1.1
-psutil>=5.9.5
