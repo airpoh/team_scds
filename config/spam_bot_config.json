@@ -1,0 +1,28 @@
+{
+  "spam_thresholds": {
+    "rule_based_threshold": 3,
+    "ml_threshold": 0.7,
+    "combined_threshold": 0.6
+  },
+  "tfidf_settings": {
+    "max_features": 10000,
+    "ngram_range": [1, 2],
+    "stop_words": "english",
+    "min_df": 2
+  },
+  "minhash_settings": {
+    "threshold": 0.8,
+    "num_perm": 128
+  },
+  "bot_detection": {
+    "similarity_threshold": 0.85,
+    "min_cluster_size": 3,
+    "temporal_window_hours": 24
+  },
+  "spam_patterns": {
+    "excessive_caps_ratio": 0.7,
+    "excessive_emoji_count": 10,
+    "url_pattern_weight": 2.0,
+    "promotional_keywords_weight": 1.5
+  }
+}

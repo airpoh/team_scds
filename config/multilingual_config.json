@@ -1,0 +1,86 @@
+{
+  "models": {
+    "sentiment": {
+      "primary": "cardiffnlp/twitter-xlm-roberta-base-sentiment",
+      "fallback": "nlptown/bert-base-multilingual-uncased-sentiment"
+    },
+    "relevance": {
+      "primary": "microsoft/DialoGPT-medium",
+      "fallback": "distilbert-base-multilingual-cased"
+    }
+  },
+  "supported_languages": [
+    "en", "es", "fr", "de", "it", "pt", "nl", "pl", "tr", "ar",
+    "zh", "ja", "ko", "hi", "ru", "sv", "da", "no", "fi", "ca",
+    "eu", "gl", "cy", "ga", "mt", "is", "lv", "lt", "et", "sl",
+    "sk", "cs", "hu", "ro", "bg", "hr", "sr", "mk", "sq", "el"
+  ],
+  "language_names": {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French", 
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "tr": "Turkish",
+    "ar": "Arabic",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "hi": "Hindi",
+    "ru": "Russian",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "fi": "Finnish",
+    "ca": "Catalan",
+    "eu": "Basque",
+    "gl": "Galician",
+    "cy": "Welsh",
+    "ga": "Irish",
+    "mt": "Maltese",
+    "is": "Icelandic",
+    "lv": "Latvian", 
+    "lt": "Lithuanian",
+    "et": "Estonian",
+    "sl": "Slovenian",
+    "sk": "Slovak",
+    "cs": "Czech",
+    "hu": "Hungarian",
+    "ro": "Romanian",
+    "bg": "Bulgarian",
+    "hr": "Croatian",
+    "sr": "Serbian",
+    "mk": "Macedonian",
+    "sq": "Albanian",
+    "el": "Greek"
+  },
+  "translation": {
+    "enabled": true,
+    "confidence_threshold": 0.6,
+    "fallback_language": "en",
+    "services": {
+      "primary": "google",
+      "fallback": "libre"
+    }
+  },
+  "thresholds": {
+    "sentiment_confidence": 0.5,
+    "language_confidence": 0.3,
+    "relevance_confidence": 0.5
+  },
+  "regional_analysis": {
+    "regions": {
+      "europe": ["en", "es", "fr", "de", "it", "pt", "nl", "pl", "sv", "da", "no", "fi"],
+      "asia": ["zh", "ja", "ko", "hi", "ar", "tr"],
+      "americas": ["en", "es", "pt"],
+      "africa": ["ar", "fr", "en"],
+      "oceania": ["en"]
+    },
+    "enabled": true
+  },
+  "batch_size": 16,
+  "max_text_length": 512
+}

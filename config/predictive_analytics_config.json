@@ -1,0 +1,33 @@
+{
+  "anomaly_detection": {
+    "contamination": 0.1,
+    "n_estimators": 100,
+    "max_samples": 256,
+    "random_state": 42
+  },
+  "thresholds": {
+    "min_data_points": 10,
+    "fake_engagement": 0.8,
+    "suspicious_spike_factor": 3.0,
+    "anomaly_score_threshold": 0.6
+  },
+  "prediction": {
+    "xgboost_params": {
+      "n_estimators": 100,
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "random_state": 42
+    },
+    "lightgbm_params": {
+      "n_estimators": 100,
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "random_state": 42
+    }
+  },
+  "feature_engineering": {
+    "temporal_window_hours": 24,
+    "engagement_velocity_threshold": 0.1,
+    "quality_score_weight": 0.3
+  }
+}

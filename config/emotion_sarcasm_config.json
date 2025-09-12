@@ -1,0 +1,52 @@
+{
+  "models": {
+    "emotion": {
+      "primary": "j-hartmann/emotion-english-distilroberta-base",
+      "fallback": "SamLowe/roberta-base-go_emotions"
+    },
+    "sarcasm": {
+      "primary": "cardiffnlp/twitter-roberta-base-irony",
+      "fallback": "helinivan/english-sarcasm-detector"
+    }
+  },
+  "thresholds": {
+    "sarcasm_confidence": 0.6,
+    "emotion_confidence": 0.1
+  },
+  "labels": {
+    "sarcasm_positive": ["SARCASM", "irony", "IRONY", "1", "sarcastic"],
+    "sarcasm_negative": ["not_sarcasm", "literal", "0", "NOT_SARCASM"]
+  },
+  "emotion_mapping": {
+    "admiration": "positive",
+    "amusement": "positive", 
+    "anger": "negative",
+    "annoyance": "negative",
+    "approval": "positive",
+    "caring": "positive",
+    "confusion": "neutral",
+    "curiosity": "neutral",
+    "desire": "neutral",
+    "disappointment": "negative",
+    "disapproval": "negative",
+    "disgust": "negative",
+    "embarrassment": "negative",
+    "excitement": "positive",
+    "fear": "negative",
+    "gratitude": "positive",
+    "grief": "negative",
+    "joy": "positive",
+    "love": "positive",
+    "nervousness": "negative",
+    "optimism": "positive",
+    "pride": "positive",
+    "realization": "neutral",
+    "relief": "positive",
+    "remorse": "negative",
+    "sadness": "negative",
+    "surprise": "neutral",
+    "neutral": "neutral"
+  },
+  "batch_size": 32,
+  "max_length": 512
+}

@@ -1,0 +1,85 @@
+{
+  "models": {
+    "zero_shot_classifier": {
+      "primary": "facebook/bart-large-mnli",
+      "fallback": "microsoft/DialoGPT-medium",
+      "device_auto": true,
+      "torch_dtype": "float16"
+    },
+    "sentence_transformer": {
+      "primary": "sentence-transformers/all-MiniLM-L6-v2",
+      "fallback": "sentence-transformers/all-distilroberta-v1",
+      "normalize_embeddings": true,
+      "batch_size_cuda": 512,
+      "batch_size_cpu": 256
+    },
+    "bertopic": {
+      "calculate_probabilities": false,
+      "verbose": false,
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2"
+    }
+  },
+  "clustering": {
+    "hdbscan": {
+      "min_cluster_size": 20,
+      "min_samples": null,
+      "metric": "euclidean",
+      "cluster_selection_method": "eom"
+    },
+    "fast_mode": {
+      "min_cluster_size": 10,
+      "batch_size": 128,
+      "top_users": 4000
+    }
+  },
+  "categories": {
+    "labels": ["skincare", "makeup", "fragrance", "haircare", "body care"],
+    "zero_shot_batch_size": 64,
+    "confidence_threshold": 0.1
+  },
+  "personas": {
+    "max_per_user": 120,
+    "max_chars": 20000,
+    "top_users": 4000,
+    "cluster_terms_top_k": 6,
+    "example_comments": 2
+  },
+  "processing": {
+    "device_detection": true,
+    "memory_efficient": true,
+    "deduplication": true,
+    "batch_size": 100,
+    "max_workers": 4,
+    "enable_parallel": true,
+    "timeout_seconds": 300,
+    "memory_limit_mb": 1024,
+    "enable_caching": true
+  },
+  "output": {
+    "save_results": true,
+    "results_directory": "results",
+    "format": "json",
+    "include_raw_data": false,
+    "compress_results": false,
+    "max_file_size_mb": 100
+  },
+  "dashboard": {
+    "enabled": true,
+    "port": 8501,
+    "theme": "dark",
+    "auto_refresh": true,
+    "refresh_interval": 30
+  },
+  "monitoring": {
+    "enable_performance_tracking": true,
+    "log_level": "INFO",
+    "enable_metrics": true,
+    "alert_on_errors": true
+  },
+  "data_validation": {
+    "required_columns": ["textOriginal"],
+    "max_comment_length": 10000,
+    "min_comment_length": 1,
+    "filter_empty_comments": true
+  }
+}

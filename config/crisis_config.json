@@ -1,0 +1,116 @@
+{
+  "sentiment_monitoring": {
+    "window_size": 50,
+    "change_point_model": "rbf",
+    "min_segment_size": 10,
+    "thresholds": {
+      "negative_threshold": -0.6,
+      "trend_threshold": 0.1,
+      "volatility_threshold": 0.4,
+      "extreme_negative": -0.8
+    }
+  },
+  "keyword_detection": {
+    "max_features": 1000,
+    "ngram_range": [1, 2],
+    "keyword_window_size": 20,
+    "keywords": {
+      "violence": [
+        "kill", "die", "hurt", "attack", "fight", "blood", "murder", "violent",
+        "shoot", "stab", "punch", "beat", "destroy", "harm", "weapon", "gun",
+        "knife", "bomb", "explosive", "assassination", "terrorism", "war"
+      ],
+      "hate_speech": [
+        "hate", "stupid", "idiot", "worthless", "disgusting", "trash", "garbage",
+        "loser", "pathetic", "scum", "racist", "bigot", "nazi", "fascist",
+        "retard", "moron", "freak", "ugly", "fat", "gross"
+      ],
+      "self_harm": [
+        "suicide", "kill myself", "end it", "worthless", "want to die", 
+        "cutting", "self harm", "overdose", "jump off", "hanging", "pills",
+        "razor", "blade", "wrist", "depression", "hopeless", "give up"
+      ],
+      "harassment": [
+        "harass", "bully", "threaten", "stalk", "intimidate", "abuse",
+        "doxx", "dox", "expose", "blackmail", "extort", "cyberbully",
+        "troll", "spam", "flood", "brigade"
+      ],
+      "extremism": [
+        "radical", "extreme", "fanatic", "jihad", "crusade", "supremacist",
+        "militia", "revolutionary", "overthrow", "revolt", "uprising",
+        "conspiracy", "deep state", "illuminati", "cult"
+      ],
+      "toxic_behavior": [
+        "toxic", "cancel", "brigade", "witch hunt", "mob", "lynch",
+        "crucify", "destroy", "ruin", "expose", "shame", "humiliate"
+      ]
+    },
+    "category_weights": {
+      "violence": 3.0,
+      "hate_speech": 2.0,
+      "self_harm": 4.0,
+      "harassment": 2.5,
+      "extremism": 3.5,
+      "toxic_behavior": 1.8
+    },
+    "thresholds": {
+      "keyword_spike_zscore": 2.0,
+      "similarity_threshold": 0.7,
+      "min_cluster_size": 3,
+      "cluster_risk_threshold": 0.5
+    }
+  },
+  "real_time_monitoring": {
+    "enabled": true,
+    "check_interval_seconds": 30,
+    "batch_size": 100,
+    "memory_limit_mb": 500
+  },
+  "alert_system": {
+    "notification_channels": ["console", "file", "webhook"],
+    "webhook_url": null,
+    "alert_file_path": "alerts/crisis_alerts.json",
+    "email_notifications": {
+      "enabled": false,
+      "smtp_server": null,
+      "recipients": []
+    }
+  },
+  "system": {
+    "max_alert_history": 1000,
+    "alert_cooldown_minutes": 30,
+    "min_severity_threshold": 0.3,
+    "enable_clustering": true,
+    "enable_trend_analysis": true,
+    "data_retention_days": 30
+  },
+  "escalation_rules": {
+    "high_severity_threshold": 0.8,
+    "critical_threshold": 0.9,
+    "auto_escalation": {
+      "enabled": true,
+      "threshold": 0.85,
+      "cooldown_hours": 2
+    }
+  },
+  "video_specific_monitoring": {
+    "enabled": true,
+    "per_video_thresholds": {
+      "comment_spike_threshold": 50,
+      "sentiment_drop_threshold": 0.3,
+      "risk_keyword_ratio": 0.1
+    }
+  },
+  "temporal_analysis": {
+    "time_windows": {
+      "short_term": 300,
+      "medium_term": 1800,
+      "long_term": 7200
+    },
+    "trend_detection": {
+      "enabled": true,
+      "min_data_points": 20,
+      "significance_threshold": 0.05
+    }
+  }
+}
