@@ -13,7 +13,7 @@ def _numseries(df: pd.DataFrame, candidates: list[str]) -> pd.Series:
     return pd.Series([0] * len(df), index=df.index, dtype="float64")
 
 def render(df: pd.DataFrame):
-    st.subheader("📊 KPIs")
+    st.subheader(" KPIs")
 
     comments = int(len(df))
     likes_s  = _numseries(df, ["like_count", "likes"])

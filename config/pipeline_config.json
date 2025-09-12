@@ -1,0 +1,115 @@
+{
+  "pipeline": {
+    "name": "CommentSense Analysis Pipeline",
+    "version": "2.0.0",
+    "description": "Comprehensive YouTube comment analysis with advanced analytics",
+    "processing_mode": "sequential",
+    "enable_parallel": false,
+    "max_workers": 4,
+    "memory_optimization": true,
+    "lazy_loading": true
+  },
+  
+  "data": {
+    "input_format": "csv",
+    "text_column": "textOriginal",
+    "required_columns": ["textOriginal", "authorId", "publishedAt"],
+    "max_comments_per_batch": 1000,
+    "sample_size": null,
+    "shuffle_data": false
+  },
+  
+  "modules": {
+    "enabled": [
+      "emotion_sarcasm",
+      "network_analysis", 
+      "category_classification",
+      "persona_clustering",
+      "composite_kpi"
+    ],
+    "execution_order": [
+      "emotion_sarcasm",
+      "network_analysis",
+      "category_classification", 
+      "persona_clustering"
+    ]
+  },
+  
+  "module_configs": {
+    "emotion_sarcasm": {
+      "config_path": "config/emotion_sarcasm_config.json",
+      "batch_size": 32,
+      "device": "auto"
+    },
+    "visual_emoji": {
+      "config_path": "config/emoji_config.json",
+      "device": "auto"
+    },
+    "multilingual": {
+      "config_path": "config/multilingual_config.json",
+      "target_language": "en",
+      "device": "auto"
+    },
+    "crisis_detection": {
+      "config_path": "config/crisis_config.json"
+    },
+    "network_analysis": {
+      "enable_category_classification": true,
+      "enable_persona_clustering": true,
+      "enable_influencer_detection": true
+    },
+    "category_classification": {
+      "method": "zero_shot",
+      "confidence_threshold": 0.4,
+      "device": "auto"
+    },
+    "persona_clustering": {
+      "min_cluster_size": 5,
+      "max_clusters": 10,
+      "device": "auto"
+    }
+  },
+  
+  "composite_kpi": {
+    "enabled": true,
+    "weights": {
+      "emotion_quality": 0.15,
+      "spam_authenticity": 0.20,
+      "multilingual_reach": 0.10,
+      "crisis_safety": 0.15,
+      "content_relevance": 0.15,
+      "community_engagement": 0.15,
+      "comment_quality": 0.10
+    },
+    "thresholds": {
+      "excellent": 80,
+      "good": 60,
+      "fair": 40,
+      "poor": 20
+    }
+  },
+  
+  "output": {
+    "results_directory": "results",
+    "save_format": "json",
+    "include_raw_data": false,
+    "include_debug_info": false,
+    "timestamp_format": "%Y%m%d_%H%M%S"
+  },
+  
+  "performance": {
+    "apple_silicon_optimization": true,
+    "force_cpu_on_apple_silicon": true,
+    "memory_cleanup_frequency": 100,
+    "batch_processing": true,
+    "max_memory_usage_gb": 8
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "log_to_file": false,
+    "log_file": "logs/pipeline.log",
+    "include_timestamps": true,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

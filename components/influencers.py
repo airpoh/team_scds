@@ -5,7 +5,7 @@ import plotly.express as px
 
 def render(influencers_df: pd.DataFrame,
            communities_df: pd.DataFrame | None = None):
-    st.subheader("📣 Influencers & Communities (PageRank • Betweenness • Louvain)")
+    st.subheader(" Influencers & Communities (PageRank • Betweenness • Louvain)")
 
     if influencers_df is None or len(influencers_df) == 0:
         st.info("No influencer data available.")

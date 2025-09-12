@@ -3,6 +3,22 @@ CommentSense Streamlit Dashboard
 
 Interactive dashboard for YouTube comment analysis with real-time insights
 """
+# --- macOS stability & tokenizer hygiene (must be before torch/transformers import) ---
+import os, platform, multiprocessing as mp
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")   # avoid hard MPS failures
+os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")         # keeps things calmer with NumPy/BLAS
+if platform.system() == "Darwin" and platform.machine() in {"arm64","aarch64"}:
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")       # be explicit: no CUDA on Mac
+
+try:
+    mp.set_start_method("spawn", force=True)                # avoids leaked semaphores on macOS
+except RuntimeError:
+    pass
+# -------------------------------------------------------------------
 
 import streamlit as st
 import pandas as pd
@@ -135,13 +151,83 @@ class CommentSenseDashboard:
     
     def _safe_get_results(self, key: str, default=None):
         """Safely get data from results with proper error handling"""
+        if not key:
+            logger.warning("_safe_get_results called with empty key, returning default")
+            return default if default is not None else {}
+            
         if not isinstance(st.session_state.results, dict):
             logger.error(f"_safe_get_results: results is not dict, type: {type(st.session_state.results)}")
             return default
         
-        result = st.session_state.results.get(key, default)
-        logger.info(f"_safe_get_results: key='{key}', result_type={type(result)}")
-        return result
+        try:
+            result = st.session_state.results.get(key, default)
+            logger.debug(f"_safe_get_results: key='{key}', result_type={type(result)}")  # Changed from info to debug
+            return result
+        except Exception as e:
+            logger.error(f"Error in _safe_get_results for key '{key}': {e}")
+            return default if default is not None else {}
+    
+    def _get_module_data(self, module_name: str, data_key: str = None):
+        """Enhanced helper to get module data from various result sources"""
+        logger.info(f"_get_module_data: Looking for {module_name}, data_key: {data_key}")
+        
+        # Try aggregated_insights first
+        insights = self._safe_get_results('aggregated_insights', {})
+        if data_key and data_key in insights:
+            logger.info(f"_get_module_data: Found {data_key} in aggregated_insights")
+            return insights[data_key]
+        
+        # Try module_results with exact name
+        module_results = self._safe_get_results('module_results', {})
+        if module_name in module_results:
+            logger.info(f"_get_module_data: Found {module_name} in module_results")
+            return module_results[module_name]
+        
+        # Try module_results with alternative names (based on actual result structure)
+        alternative_names = {
+            'category_classification': ['category_analysis', 'categories'],
+            'persona_clustering': ['personas', 'persona_analysis'],
+            'crisis_detection': ['crisis_analysis', 'crisis'],
+            'spam_bot_detection': ['spam_bot_analysis', 'spam_analysis'],
+            'multilingual_analysis': ['multilingual', 'language_analysis'],
+            'quality_scoring': ['quality_analysis', 'comment_quality'],
+            'network_analysis': ['network', 'influencer_analysis'],
+            'emotion_detection': ['emotion_analysis', 'emotion_sarcasm'],
+            'visual_emoji': ['emoji_analysis', 'visual_emoji_analysis'],
+            'predictive_analytics': ['predictive_analysis', 'predictive']
+        }
+        
+        if module_name in alternative_names:
+            for alt_name in alternative_names[module_name]:
+                if alt_name in module_results:
+                    logger.info(f"_get_module_data: Found {alt_name} as alternative for {module_name}")
+                    return module_results[alt_name]
+        
+        # Try composite_kpi all_module_results
+        composite_kpi = self._safe_get_results('composite_kpi', {})
+        if composite_kpi and composite_kpi.get('status') == 'success':
+            all_modules = composite_kpi.get('all_module_results', {})
+            
+            # Try exact name
+            if module_name in all_modules:
+                logger.info(f"_get_module_data: Found {module_name} in composite_kpi")
+                return all_modules[module_name]
+            
+            # Try alternative names
+            if module_name in alternative_names:
+                for alt_name in alternative_names[module_name]:
+                    if alt_name in all_modules:
+                        logger.info(f"_get_module_data: Found {alt_name} in composite_kpi as alternative for {module_name}")
+                        return all_modules[alt_name]
+        
+        # Try direct result keys for backwards compatibility
+        results = st.session_state.results or {}
+        if module_name in results:
+            logger.info(f"_get_module_data: Found {module_name} in direct results")
+            return results[module_name]
+        
+        logger.warning(f"_get_module_data: No data found for {module_name}")
+        return None
     
     def clear_cache(self):
         """Clear all cached data and reset session state"""
@@ -163,30 +249,30 @@ class CommentSenseDashboard:
         st.markdown('<h1 class="main-header"> CommentSense Dashboard</h1>', unsafe_allow_html=True)
         st.markdown("**Advanced YouTube Comment Analysis with AI-Powered Insights**")
         
-        # Display all 8 comprehensive features in two rows
+        # Display key analysis modules in priority order
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.markdown("""
             <div class="metric-container">
-                <h4>Emotion Analysis</h4>
-                <p>Advanced emotion recognition with sarcasm detection</p>
+                <h4>Quality Scoring 2.0</h4>
+                <p>Comprehensive comment quality evaluation with composite KPIs</p>
             </div>
             """, unsafe_allow_html=True)
             
         with col2:
             st.markdown("""
             <div class="metric-container">
-                <h4>Multilingual</h4>
-                <p>Support for 40+ languages with auto-translation</p>
+                <h4>Spam & Bot Detection</h4>
+                <p>Advanced spam filtering & bot network identification</p>
             </div>
             """, unsafe_allow_html=True)
             
         with col3:
             st.markdown("""
             <div class="metric-container">
-                <h4>Emoji Analysis</h4>
-                <p>Visual sentiment analysis from emojis and images</p>
+                <h4>Cross-Language Analysis</h4>
+                <p>Support for 40+ languages with auto-translation</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -199,37 +285,29 @@ class CommentSenseDashboard:
             """, unsafe_allow_html=True)
             
         # Second row of features
-        col5, col6, col7, col8 = st.columns(4)
+        col5, col6, col7 = st.columns(3)
         
         with col5:
             st.markdown("""
             <div class="metric-container">
-                <h4>Network Analysis</h4>
-                <p>Influencer detection, communities & user personas</p>
+                <h4>Category Classification</h4>
+                <p>Content categorization and sub-topic analysis</p>
             </div>
             """, unsafe_allow_html=True)
             
         with col6:
             st.markdown("""
             <div class="metric-container">
-                <h4>Quality Analysis</h4>
-                <p>Comment relevance, informativeness & constructiveness scoring</p>
+                <h4>Customer Personas</h4>
+                <p>Voice-of-customer clustering and persona identification</p>
             </div>
             """, unsafe_allow_html=True)
             
         with col7:
             st.markdown("""
             <div class="metric-container">
-                <h4>Spam & Bot Detection</h4>
-                <p>Advanced spam filtering & bot account identification</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with col8:
-            st.markdown("""
-            <div class="metric-container">
-                <h4>Predictive Analytics</h4>
-                <p>Engagement forecasting & risk assessment</p>
+                <h4>Network Analysis</h4>
+                <p>Influencer detection and community mapping</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -318,7 +396,8 @@ class CommentSenseDashboard:
                 "dataset/comments2.csv", 
                 "dataset/comments3.csv",
                 "dataset/comments4.csv",
-                "dataset/comments5.csv"
+                "dataset/comments5.csv",
+                "videos.csv"
             ]
             
             # Check which files exist
@@ -464,9 +543,15 @@ class CommentSenseDashboard:
             analysis_df = st.session_state.comments_df.head(self.max_comments).copy()
             
             # Configure modules based on user selection
-            for module, enabled in self.enable_modules.items():
-                if module in st.session_state.pipeline.config['modules']:
-                    st.session_state.pipeline.config['modules'][module]['enabled'] = enabled
+            # Note: Pipeline config doesn't have 'modules' key - modules are configured individually
+            # This configuration step is optional since modules are enabled by default
+            if 'modules' in st.session_state.pipeline.config:
+                for module, enabled in self.enable_modules.items():
+                    if module in st.session_state.pipeline.config['modules']:
+                        st.session_state.pipeline.config['modules'][module]['enabled'] = enabled
+            else:
+                # Pipeline uses default module configurations
+                logger.info("Pipeline uses default module configurations (modules config not found)")
             
             # Run analysis
             status_text.text("Running analysis...")
@@ -536,53 +621,52 @@ class CommentSenseDashboard:
         if hasattr(st.session_state, 'current_results_file') and st.session_state.current_results_file:
             st.success(f"**Displaying results from:** {st.session_state.current_results_file}")
         else:
-            st.info("📊 **Displaying results from:** Live analysis")
+            st.info("**Displaying results from:** Live analysis")
         
-        # Results overview
-        self.render_overview()
-        
-        # Detailed analysis tabs
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-            "Sentiment Analysis",
-            "Emotion Detection", 
-            "Multilingual Insights",
-            "Crisis Alerts",
-            "Network Analysis",
-            "Influencers & Communities",
-            "Composite KPI",
-            "Quality Analysis", 
-            "Spam & Bot Detection",
+        # Detailed analysis tabs - Reordered according to user preference
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+            "Comment Quality Scoring 2.0",
+            "Spam + Bot Network Detection",
+            "Cross-Language Analysis", 
+            "Crisis Detection",
+            "Category Classification",
+            "Voice-of-Customer Personas",
+            "Influencer & Community Detection",
             "Detailed Results"
         ])
         
         with tab1:
-            self.render_sentiment_analysis()
+            # Comment Quality Scoring 2.0 (Composite KPI)
+            self.render_composite_kpi()
+            self.render_quality_analysis()
             
         with tab2:
-            self.render_emotion_analysis()
+            # Spam + Bot Network Detection
+            self.render_spam_bot_detection()
             
         with tab3:
+            # Cross-Language Comment Analysis
             self.render_multilingual_analysis()
             
         with tab4:
+            # Crisis Detection (Early Warning)
             self.render_crisis_alerts()
             
         with tab5:
-            self.render_network_analysis()
+            # Category + Sub-Topic Classification
+            self.render_category_classification()
             
         with tab6:
-            self.render_influencers_communities()
+            # Voice-of-Customer Personas
+            self.render_persona_clustering()
             
         with tab7:
-            self.render_composite_kpi()
+            # Influencer & Community Detection
+            self.render_network_analysis()
+            self.render_influencers_communities()
             
         with tab8:
-            self.render_quality_analysis()
-            
-        with tab9:
-            self.render_spam_bot_detection()
-            
-        with tab10:
+            # Detailed Results
             self.render_detailed_results()
     
     def render_overview(self):
@@ -654,6 +738,355 @@ class CommentSenseDashboard:
             for rec in recommendations:
                 st.write(f"• {rec}")
     
+    def render_category_classification(self):
+        """Render category classification results"""
+        st.markdown("## Category + Sub-Topic Classification")
+        
+        # Try multiple sources for category data
+        category_data = self._get_module_data('category_classification')
+        
+        if category_data is None or (isinstance(category_data, dict) and not category_data):
+            # Try composite KPI results
+            composite_kpi = self._safe_get_results('composite_kpi', {})
+            all_modules = composite_kpi.get('all_module_results', {})
+            category_data = all_modules.get('category_classification', {})
+        
+        # Handle DataFrame results directly from modules
+        if isinstance(category_data, pd.DataFrame):
+            # Process DataFrame directly
+            st.success(f"Classified {len(category_data)} comments")
+            
+            # Display category summary
+            if 'category' in category_data.columns:
+                category_counts = category_data['category'].value_counts().to_dict()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Category pie chart
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(category_counts.values()),
+                        names=list(category_counts.keys()),
+                        title="Content Category Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Category bar chart
+                    fig_bar = px.bar(
+                        x=list(category_counts.keys()),
+                        y=list(category_counts.values()),
+                        title="Comments by Category",
+                        labels={'x': 'Category', 'y': 'Number of Comments'}
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Show category breakdown
+            st.markdown("### Category Analysis")
+            display_cols = [col for col in ['text', 'category', 'confidence', 'subtopic'] if col in category_data.columns]
+            if display_cols:
+                st.dataframe(category_data[display_cols].head(20))
+            else:
+                st.dataframe(category_data.head(20))
+                
+        elif isinstance(category_data, list) and len(category_data) > 0:
+            # Handle list of dicts format (new JSON serialization)
+            st.success(f"Classified {len(category_data)} comments")
+            
+            # Convert to DataFrame for processing
+            category_df = pd.DataFrame(category_data)
+            
+            # Display category summary
+            if 'category' in category_df.columns:
+                category_counts = category_df['category'].value_counts().to_dict()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Category pie chart
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(category_counts.values()),
+                        names=list(category_counts.keys()),
+                        title="Content Category Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Category bar chart
+                    fig_bar = px.bar(
+                        x=list(category_counts.keys()),
+                        y=list(category_counts.values()),
+                        title="Comments by Category",
+                        labels={'x': 'Category', 'y': 'Number of Comments'}
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # Subtopic analysis
+                if 'subtopic' in category_df.columns:
+                    st.markdown("### Subtopic Analysis")
+                    
+                    # Overall subtopic distribution
+                    subtopic_counts = category_df['subtopic'].value_counts()
+                    fig_sub = px.bar(
+                        x=subtopic_counts.index,
+                        y=subtopic_counts.values,
+                        title="Overall Subtopic Distribution",
+                        labels={'x': 'Subtopic', 'y': 'Count'}
+                    )
+                    st.plotly_chart(fig_sub, use_container_width=True)
+                    
+                    # Breakdown by category
+                    st.markdown("### Subtopic Breakdown by Category")
+                    for category in category_df['category'].unique():
+                        cat_data = category_df[category_df['category'] == category]
+                        subtopic_breakdown = cat_data['subtopic'].value_counts()
+                        
+                        with st.expander(f"{category.title()} ({len(cat_data)} comments)"):
+                            col1, col2 = st.columns([1, 2])
+                            
+                            with col1:
+                                for subtopic, count in subtopic_breakdown.items():
+                                    percentage = (count / len(cat_data)) * 100
+                                    st.write(f"• **{subtopic}**: {count} ({percentage:.1f}%)")
+                            
+                            with col2:
+                                # Show examples for this category
+                                if 'text' in cat_data.columns:
+                                    examples = cat_data.head(3)['text'].tolist()
+                                    st.markdown("**Examples:**")
+                                    for i, example in enumerate(examples):
+                                        st.write(f"{i+1}. {example[:100]}...")
+            
+            # Show category breakdown
+            st.markdown("### Category Analysis")
+            display_cols = [col for col in ['text', 'category', 'category_score', 'subtopic'] if col in category_df.columns]
+            if display_cols:
+                st.dataframe(category_df[display_cols].head(20))
+            else:
+                st.dataframe(category_df.head(20))
+                
+        elif isinstance(category_data, dict) and category_data.get('status') == 'success':
+            results = category_data.get('results', {})
+            
+            # Category distribution
+            category_counts = results.get('category_counts', {})
+            if category_counts:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Category pie chart
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(category_counts.values()),
+                        names=list(category_counts.keys()),
+                        title="Content Category Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Category bar chart
+                    fig_bar = px.bar(
+                        x=list(category_counts.keys()),
+                        y=list(category_counts.values()),
+                        title="Comments by Category",
+                        labels={'x': 'Category', 'y': 'Number of Comments'}
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # Category metrics
+                st.markdown("### Category Metrics")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    total_categories = len(category_counts)
+                    st.metric("Total Categories", total_categories)
+                
+                with col2:
+                    most_common_category = max(category_counts, key=category_counts.get) if category_counts else "N/A"
+                    st.metric("Most Common", most_common_category)
+                
+                with col3:
+                    total_classified = sum(category_counts.values())
+                    st.metric("Comments Classified", f"{total_classified:,}")
+                
+                with col4:
+                    avg_per_category = total_classified / total_categories if total_categories > 0 else 0
+                    st.metric("Avg per Category", f"{avg_per_category:.0f}")
+            
+            # Sub-topic analysis
+            subtopics = results.get('subtopics', {})
+            if subtopics:
+                st.markdown("### Sub-Topic Analysis")
+                
+                for category, topics in subtopics.items():
+                    if topics:
+                        with st.expander(f"{category} Sub-Topics"):
+                            for topic, count in topics.items():
+                                st.write(f"• **{topic}**: {count} comments")
+            
+            # Classification confidence
+            confidence_stats = results.get('confidence_stats', {})
+            if confidence_stats:
+                st.markdown("### Classification Quality")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    avg_confidence = confidence_stats.get('avg_confidence', 0)
+                    st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+                
+                with col2:
+                    high_confidence = confidence_stats.get('high_confidence_count', 0)
+                    st.metric("High Confidence", f"{high_confidence:,}")
+                
+                with col3:
+                    low_confidence = confidence_stats.get('low_confidence_count', 0)
+                    st.metric("Low Confidence", f"{low_confidence:,}")
+        
+        elif isinstance(category_data, dict) and 'error' in category_data:
+            st.error(f"Category classification error: {category_data['error']}")
+        else:
+            st.warning("Category classification module is not currently enabled in the pipeline")
+            st.info("This module would provide content categorization and sub-topic analysis. To enable it, please check the pipeline configuration.")
+    
+    def render_persona_clustering(self):
+        """Render persona clustering results"""
+        st.markdown("## Voice-of-Customer Personas")
+        
+        # Try multiple sources for persona data
+        persona_data = self._get_module_data('persona_clustering')
+        
+        if persona_data is None or (isinstance(persona_data, dict) and not persona_data):
+            # Try composite KPI results
+            composite_kpi = self._safe_get_results('composite_kpi', {})
+            all_modules = composite_kpi.get('all_module_results', {})
+            persona_data = all_modules.get('persona_clustering', {})
+        
+        # Handle DataFrame results directly from modules
+        if isinstance(persona_data, pd.DataFrame):
+            # Process DataFrame directly
+            st.success(f"Found {len(persona_data)} user personas")
+            
+            # Display personas summary
+            if 'persona_label' in persona_data.columns:
+                persona_counts = persona_data['persona_label'].value_counts().to_dict()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Persona pie chart
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(persona_counts.values()),
+                        names=list(persona_counts.keys()),
+                        title="User Persona Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Persona bar chart
+                    fig_bar = px.bar(
+                        x=list(persona_counts.keys()),
+                        y=list(persona_counts.values()),
+                        title="Users by Persona Type",
+                        labels={'x': 'Persona', 'y': 'Number of Users'}
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Show top personas
+            st.markdown("### Top User Personas")
+            display_cols = [col for col in ['user_id', 'persona_label', 'dominant_category', 'top_subtopic', 'comment_count'] if col in persona_data.columns]
+            if display_cols:
+                st.dataframe(persona_data[display_cols].head(20))
+            else:
+                st.dataframe(persona_data.head(20))
+                
+        elif isinstance(persona_data, dict) and persona_data.get('status') == 'success':
+            results = persona_data.get('results', {})
+            
+            # Persona distribution
+            persona_counts = results.get('persona_counts', {})
+            if persona_counts:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Persona pie chart
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(persona_counts.values()),
+                        names=list(persona_counts.keys()),
+                        title="User Persona Distribution"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Persona bar chart
+                    fig_bar = px.bar(
+                        x=list(persona_counts.keys()),
+                        y=list(persona_counts.values()),
+                        title="Users by Persona Type",
+                        labels={'x': 'Persona', 'y': 'Number of Users'}
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # Persona metrics
+                st.markdown("### Persona Metrics")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    total_personas = len(persona_counts)
+                    st.metric("Total Personas", total_personas)
+                
+                with col2:
+                    dominant_persona = max(persona_counts, key=persona_counts.get) if persona_counts else "N/A"
+                    st.metric("Dominant Persona", dominant_persona)
+                
+                with col3:
+                    total_users = sum(persona_counts.values())
+                    st.metric("Users Classified", f"{total_users:,}")
+                
+                with col4:
+                    avg_per_persona = total_users / total_personas if total_personas > 0 else 0
+                    st.metric("Avg per Persona", f"{avg_per_persona:.0f}")
+            
+            # Persona characteristics
+            persona_details = results.get('persona_details', {})
+            if persona_details:
+                st.markdown("### Persona Characteristics")
+                
+                for persona, details in persona_details.items():
+                    with st.expander(f"{persona} Persona Details"):
+                        if isinstance(details, dict):
+                            for key, value in details.items():
+                                st.write(f"• **{key.replace('_', ' ').title()}**: {value}")
+                        else:
+                            st.write(f"• {details}")
+            
+            # Clustering quality
+            clustering_stats = results.get('clustering_stats', {})
+            if clustering_stats:
+                st.markdown("### Clustering Quality")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    silhouette_score = clustering_stats.get('silhouette_score', 0)
+                    st.metric("Silhouette Score", f"{silhouette_score:.3f}")
+                
+                with col2:
+                    inertia = clustering_stats.get('inertia', 0)
+                    st.metric("Inertia", f"{inertia:.0f}")
+                
+                with col3:
+                    n_clusters = clustering_stats.get('n_clusters', 0)
+                    st.metric("Optimal Clusters", n_clusters)
+        
+        elif isinstance(persona_data, dict) and 'error' in persona_data:
+            st.error(f"Persona clustering error: {persona_data['error']}")
+        else:
+            st.warning("👥 Voice-of-Customer personas module is not currently enabled in the pipeline")
+            st.info("This module would provide user clustering and persona identification. To enable it, please check the pipeline configuration.")
+
     def render_sentiment_analysis(self):
         """Render sentiment analysis visualizations"""
         st.markdown("## Sentiment Analysis")
@@ -668,28 +1101,82 @@ class CommentSenseDashboard:
         
         with col1:
             # Sentiment distribution
-            if overall_sentiment:
-                fig = go.Figure(data=go.Scatter(
+            if overall_sentiment and any(overall_sentiment.get(key) is not None for key in ['mean', 'min', 'max']):
+                mean_val = overall_sentiment.get('mean', 0)
+                min_val = overall_sentiment.get('min', 0) 
+                max_val = overall_sentiment.get('max', 0)
+                std_val = overall_sentiment.get('std', 0)
+                
+                # Create a more informative sentiment chart
+                fig = go.Figure()
+                
+                # Add main sentiment values
+                fig.add_trace(go.Scatter(
                     x=['Mean', 'Min', 'Max'],
-                    y=[overall_sentiment.get('mean', 0), 
-                       overall_sentiment.get('min', 0), 
-                       overall_sentiment.get('max', 0)],
+                    y=[mean_val, min_val, max_val],
                     mode='markers+lines',
-                    marker=dict(size=12, color=['blue', 'red', 'green'])
+                    marker=dict(size=12, color=['blue', 'red', 'green']),
+                    name='Sentiment Values'
                 ))
-                fig.update_layout(title="Sentiment Range", yaxis_title="Sentiment Score")
+                
+                # Add standard deviation as error bar on mean
+                fig.add_trace(go.Scatter(
+                    x=['Mean'],
+                    y=[mean_val],
+                    error_y=dict(type='data', array=[std_val], visible=True),
+                    mode='markers',
+                    marker=dict(size=15, color='orange'),
+                    name='Mean ± Std'
+                ))
+                
+                fig.update_layout(
+                    title=f"Sentiment Analysis (Mean: {mean_val:.3f})",
+                    yaxis_title="Sentiment Score",
+                    yaxis=dict(range=[-1.1, 1.1]),
+                    showlegend=True
+                )
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No sentiment data available")
         
         with col2:
-            # Emoji sentiment
-            emoji_sentiment = insights.get('emoji_sentiment', {})
-            if emoji_sentiment:
-                labels = ['Positive Emojis', 'Negative Emojis']
-                values = [emoji_sentiment.get('positive_emojis_count', 0),
-                         emoji_sentiment.get('negative_emojis_count', 0)]
+            # Sarcasm detection metrics
+            sarcasm_stats = insights.get('sarcasm_stats', {})
+            if sarcasm_stats:
+                sarcastic_count = sarcasm_stats.get('sarcastic_comments', 0)
+                total_comments = sarcasm_stats.get('total_comments', 1)
+                sarcasm_ratio = sarcastic_count / total_comments if total_comments > 0 else 0
                 
-                fig = px.pie(values=values, names=labels, title="Emoji Sentiment Distribution")
-                st.plotly_chart(fig, use_container_width=True)
+                st.metric(
+                    "Sarcastic Comments", 
+                    f"{sarcastic_count}",
+                    delta=f"{sarcasm_ratio:.1%} of total",
+                    help="Number and percentage of sarcastic comments detected"
+                )
+                
+                if sarcasm_ratio > 0.1:  # More than 10% sarcastic
+                    st.warning(f"High sarcasm detected ({sarcasm_ratio:.1%})")
+                elif sarcasm_ratio > 0.05:  # More than 5% sarcastic
+                    st.info(f"Moderate sarcasm detected ({sarcasm_ratio:.1%})")
+                else:
+                    st.success("Low sarcasm levels")
+            else:
+                # Try to get sarcasm data from module results
+                module_results = self._safe_get_results('module_results', {})
+                if 'emotion_sarcasm' in module_results:
+                    emotion_list = module_results['emotion_sarcasm']
+                    if emotion_list:
+                        sarcastic_count = sum(1 for item in emotion_list if item.get('is_sarcastic', False))
+                        total_count = len(emotion_list)
+                        sarcasm_ratio = sarcastic_count / total_count if total_count > 0 else 0
+                        
+                        st.metric("Sarcastic Comments", f"{sarcastic_count}/{total_count}")
+                        if sarcasm_ratio > 0.1:
+                            st.warning(f"High sarcasm: {sarcasm_ratio:.1%}")
+                        else:
+                            st.success(f"Sarcasm level: {sarcasm_ratio:.1%}")
+                else:
+                    st.info("No sarcasm analysis data available")
     
     def render_emotion_analysis(self):
         """Render emotion analysis visualizations"""
@@ -701,48 +1188,135 @@ class CommentSenseDashboard:
         emotions = insights.get('dominant_emotions', {})
         logger.info(f"render_emotion_analysis: emotions type: {type(emotions)}")
         
-        if emotions:
-            # Emotion radar chart
-            fig = go.Figure(data=go.Scatterpolar(
-                r=list(emotions.values()),
-                theta=list(emotions.keys()),
-                fill='toself',
-                name='Emotions'
-            ))
+        if emotions and any(v > 0 for v in emotions.values()):
+            # Create two columns for better layout
+            col1, col2 = st.columns(2)
             
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, max(emotions.values()) * 1.1] if emotions.values() else [0, 1]
-                    )),
-                title="Dominant Emotions"
-            )
+            with col1:
+                # Emotion radar chart
+                emotion_names = list(emotions.keys())
+                emotion_values = list(emotions.values())
+                
+                fig = go.Figure(data=go.Scatterpolar(
+                    r=emotion_values,
+                    theta=emotion_names,
+                    fill='toself',
+                    name='Emotions',
+                    line_color='rgb(51, 153, 255)'
+                ))
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, max(emotion_values) * 1.1],
+                            tickfont=dict(size=10)
+                        )),
+                    title="Emotion Radar Chart",
+                    font=dict(size=12)
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
             
-            st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                # Emotion bar chart with colors
+                emotion_colors = {
+                    'joy': '#FFD700',
+                    'sadness': '#4682B4', 
+                    'anger': '#DC143C',
+                    'fear': '#9932CC',
+                    'surprise': '#FF6347',
+                    'disgust': '#228B22',
+                    'neutral': '#708090'
+                }
+                
+                colors = [emotion_colors.get(emotion, '#708090') for emotion in emotion_names]
+                
+                fig_bar = go.Figure(data=go.Bar(
+                    x=emotion_names,
+                    y=emotion_values,
+                    marker_color=colors,
+                    text=[f'{v:.3f}' for v in emotion_values],
+                    textposition='auto'
+                ))
+                
+                fig_bar.update_layout(
+                    title="Emotion Intensity",
+                    xaxis_title="Emotion",
+                    yaxis_title="Intensity",
+                    yaxis=dict(range=[0, max(emotion_values) * 1.1])
+                )
+                
+                st.plotly_chart(fig_bar, use_container_width=True)
             
-            # Emotion bar chart
-            fig_bar = px.bar(
-                x=list(emotions.keys()),
-                y=list(emotions.values()),
-                title="Emotion Intensity",
-                labels={'x': 'Emotion', 'y': 'Intensity'}
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            # Show dominant emotion info
+            dominant_emotion = max(emotions, key=emotions.get)
+            dominant_value = emotions[dominant_emotion]
+            
+            st.success(f"**Dominant Emotion**: {dominant_emotion.title()} ({dominant_value:.1%})")
+            
         else:
-            st.info("No emotion data available")
+            st.info("No emotion data available - analyzing raw emotion results...")
+            
+            # Try to get data from module results 
+            module_results = self._safe_get_results('module_results', {})
+            if 'emotion_sarcasm' in module_results:
+                emotion_list = module_results['emotion_sarcasm']
+                if emotion_list and len(emotion_list) > 0:
+                    st.info(f"Found {len(emotion_list)} emotion analysis results")
+                    
+                    # Aggregate emotions from individual results
+                    emotion_totals = {}
+                    for result in emotion_list:
+                        if 'emotions' in result:
+                            for emotion, value in result['emotions'].items():
+                                emotion_totals[emotion] = emotion_totals.get(emotion, 0) + value
+                    
+                    if emotion_totals:
+                        # Normalize by number of results
+                        emotion_averages = {k: v/len(emotion_list) for k, v in emotion_totals.items()}
+                        st.bar_chart(emotion_averages)
+                        st.success(f"Showing aggregated emotions from {len(emotion_list)} comments")
+            else:
+                st.warning("No emotion analysis results found in module data")
     
     def render_multilingual_analysis(self):
         """Render multilingual analysis"""
         st.markdown("## Multilingual Analysis")
         
         logger.info("render_multilingual_analysis: Starting")
+        
+        # Try to get multilingual data using enhanced retrieval
+        multilingual_data = self._get_module_data('multilingual_analysis')
+        
+        # Also check aggregated insights
         insights = self._safe_get_results('aggregated_insights', {})
-        logger.info(f"render_multilingual_analysis: insights type: {type(insights)}")
         lang_dist = insights.get('language_distribution', {})
+        
+        logger.info(f"render_multilingual_analysis: multilingual_data type: {type(multilingual_data)}")
         logger.info(f"render_multilingual_analysis: lang_dist type: {type(lang_dist)}")
         
-        if lang_dist:
+        # Check if we have meaningful language distribution
+        has_lang_data = lang_dist and any(v > 0 for v in lang_dist.values()) if lang_dist else False
+        
+        # If no aggregated language distribution, try to extract from multilingual module results
+        if not has_lang_data:
+            module_results = self._safe_get_results('module_results', {})
+            if 'multilingual' in module_results and isinstance(module_results['multilingual'], list):
+                # Extract languages from individual results
+                temp_lang_counts = {}
+                for result in module_results['multilingual']:
+                    if isinstance(result, dict) and 'language' in result:
+                        lang = result['language']
+                        if lang and lang != 'unknown':
+                            temp_lang_counts[lang] = temp_lang_counts.get(lang, 0) + 1
+                
+                if temp_lang_counts:
+                    lang_dist = temp_lang_counts
+                    has_lang_data = True
+                    st.info("Language distribution extracted from multilingual analysis")
+        
+        if has_lang_data:
             # Language distribution pie chart
             fig = px.pie(
                 values=list(lang_dist.values()),
@@ -759,21 +1333,116 @@ class CommentSenseDashboard:
                 labels={'x': 'Language', 'y': 'Number of Comments'}
             )
             st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Show summary
+            total_comments = sum(lang_dist.values())
+            most_common_lang = max(lang_dist, key=lang_dist.get)
+            st.success(f"**{total_comments}** total comments analyzed, **{most_common_lang}** is the most common language")
+            
         else:
-            st.info("No multilingual data available")
+            st.warning("No language distribution available")
+            st.info("This could happen if:")
+            st.write("- All comments are very short (< 8 characters)")
+            st.write("- All comments contain only symbols/emojis")
+            st.write("- Language detection failed")
+            
+            # Show raw multilingual data for debugging
+            module_results = self._safe_get_results('module_results', {})
+            composite_kpi = self._safe_get_results('composite_kpi', {})
+            all_modules = composite_kpi.get('all_module_results', {}) if composite_kpi else {}
+            
+            if 'multilingual' in module_results:
+                with st.expander("Raw Multilingual Analysis Data (for debugging)"):
+                    multilingual_data = module_results['multilingual']
+                    if isinstance(multilingual_data, list) and len(multilingual_data) > 0:
+                        st.write(f"Found {len(multilingual_data)} results:")
+                        # Show first 3 results as examples
+                        for i, result in enumerate(multilingual_data[:3]):
+                            if isinstance(result, dict):
+                                st.json({f"example_{i+1}": result})
+            
+            elif 'multilingual_analysis' in all_modules:
+                with st.expander("Raw Multilingual Analysis Data (for debugging)"):
+                    multilingual_data = all_modules['multilingual_analysis']
+                    if isinstance(multilingual_data, list) and len(multilingual_data) > 0:
+                        st.write(f"Found {len(multilingual_data)} results from composite KPI:")
+                        # Show first 3 results as examples
+                        for i, result in enumerate(multilingual_data[:3]):
+                            if isinstance(result, dict):
+                                st.json({f"example_{i+1}": result})
+                        
+                        # Try to extract language distribution manually
+                        st.write("**Extracting language distribution:**")
+                        manual_lang_counts = {}
+                        for result in multilingual_data:
+                            if isinstance(result, dict) and 'language' in result:
+                                lang = result['language']
+                                if lang:
+                                    manual_lang_counts[lang] = manual_lang_counts.get(lang, 0) + 1
+                        
+                        if manual_lang_counts:
+                            st.success(f"Found languages: {manual_lang_counts}")
+                            # Create quick visualization
+                            fig = px.bar(
+                                x=list(manual_lang_counts.keys()),
+                                y=list(manual_lang_counts.values()),
+                                title="Language Distribution (Manual Extraction)",
+                                labels={'x': 'Language', 'y': 'Number of Comments'}
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.warning("No language data found in multilingual results")
+                    else:
+                        st.json({"multilingual_results": multilingual_data})
+            else:
+                # Default assumption - most comments are probably English
+                st.info("**Assumption**: Most comments appear to be in **English** (language detection not available)")
+                pipeline_info = self._safe_get_results('pipeline_info', {})
+                total_comments = pipeline_info.get('total_comments', 0)
+                if total_comments > 0:
+                    estimated_lang_dist = {'English': total_comments}
+                    fig = px.bar(
+                        x=['English (estimated)'],
+                        y=[total_comments],
+                        title="Estimated Language Distribution",
+                        labels={'x': 'Language', 'y': 'Number of Comments'}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
     
     def render_crisis_alerts(self):
         """Render crisis detection alerts"""
         st.markdown("## Crisis Detection")
         
         logger.info("render_crisis_alerts: Starting")
-        module_results = self._safe_get_results('module_results', {})
-        logger.info(f"render_crisis_alerts: module_results type: {type(module_results)}")
-        crisis_results = module_results.get('crisis_detection', {})
+        
+        # Try multiple sources for crisis data using correct module name
+        crisis_results = self._get_module_data('crisis_detection')  # This will find crisis_analysis via alternative names
+        
+        if crisis_results is None or (isinstance(crisis_results, dict) and not crisis_results):
+            # Direct check for crisis_analysis
+            composite_kpi = self._safe_get_results('composite_kpi', {})
+            all_modules = composite_kpi.get('all_module_results', {})
+            crisis_results = all_modules.get('crisis_analysis', {})
+        
         logger.info(f"render_crisis_alerts: crisis_results type: {type(crisis_results)}")
         
         if isinstance(crisis_results, dict) and 'alerts' in crisis_results:
             alerts = crisis_results['alerts']
+            summary = crisis_results.get('summary', {})
+            
+            # Display summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Alerts", len(alerts))
+            with col2:
+                high_severity_alerts = len([a for a in alerts if a.get('severity', 0) > 0.7])
+                st.metric("High Severity", high_severity_alerts)
+            with col3:
+                risk_level = summary.get('risk_level', 'low')
+                st.metric("Risk Level", risk_level.upper())
+            with col4:
+                total_analyzed = crisis_results.get('total_comments_analyzed', 0)
+                st.metric("Comments Analyzed", f"{total_analyzed:,}")
             
             if alerts:
                 st.warning(f"{len(alerts)} crisis alerts detected!")
@@ -782,22 +1451,37 @@ class CommentSenseDashboard:
                     severity = alert.get('severity', 0)
                     alert_type = alert.get('alert_type', 'unknown')
                     description = alert.get('description', 'No description')
+                    confidence = alert.get('confidence', 0)
                     
                     severity_color = 'red' if severity > 0.7 else 'orange' if severity > 0.4 else 'yellow'
                     
                     st.markdown(f"""
                     <div style="border-left: 4px solid {severity_color}; padding: 10px; margin: 10px 0; background: #f8f9fa;">
-                        <strong>Alert {i+1}: {alert_type}</strong><br>
-                        Severity: {severity:.3f}<br>
+                        <strong>Alert {i+1}: {alert_type.replace('_', ' ').title()}</strong><br>
+                        Severity: {severity:.3f} | Confidence: {confidence:.3f}<br>
                         {description}
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                st.success("No crisis alerts detected")
+                st.success("No crisis alerts detected - All comments appear safe")
+                
+            # Show summary statistics if available
+            if summary:
+                st.markdown("### Analysis Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if 'alert_types' in summary:
+                        st.write("**Alert Types:**")
+                        for alert_type, count in summary['alert_types'].items():
+                            st.write(f"• {alert_type.replace('_', ' ').title()}: {count}")
+                with col2:
+                    max_severity = summary.get('max_severity', 0)
+                    st.metric("Max Severity", f"{max_severity:.3f}")
+                    
         elif isinstance(crisis_results, list):
-            st.info("Crisis detection results in unexpected format - please re-run analysis")
+            st.info("Crisis detection results in list format - please check data structure")
         else:
-            st.info("Crisis detection data not available")
+            st.info("Crisis detection data not available - module may not have run successfully")
     
     def render_network_analysis(self):
         """Render network analysis overview (emoji-free)"""
@@ -1113,11 +1797,28 @@ class CommentSenseDashboard:
                         elif isinstance(module_data, list):
                             st.info(f"{module_name} contains {len(module_data)} results")
                             if len(module_data) > 0:
-                                st.json(module_data[:5])  # Show first 5 items
-                                if len(module_data) > 5:
-                                    st.info(f"... and {len(module_data) - 5} more items")
+                                # For list results, show summary and sample
+                                st.markdown("**Sample Results:**")
+                                st.json(module_data[:3])  # Show first 3 items
+                                if len(module_data) > 3:
+                                    st.info(f"... and {len(module_data) - 3} more items")
+                                
+                                # Show statistics if possible
+                                if module_name == 'emotion_sarcasm':
+                                    self._show_emotion_stats(module_data)
+                                elif module_name == 'category_classification':
+                                    self._show_category_stats(module_data)
+                                elif module_name == 'persona_clustering':
+                                    self._show_persona_stats(module_data)
+                        elif hasattr(module_data, 'to_dict'):  # DataFrame
+                            st.info(f"{module_name} DataFrame with {len(module_data)} rows")
+                            st.dataframe(module_data.head(10))
                         else:
-                            st.error(f"Unexpected data type in {module_name}: {type(module_data)}")
+                            st.warning(f"Unexpected data type in {module_name}: {type(module_data)}")
+                            try:
+                                st.json(str(module_data)[:1000])  # Show first 1000 chars as string
+                            except:
+                                st.error(f"Cannot display {module_name} data")
             else:
                 st.info("No basic module results found")
         
@@ -1345,15 +2046,14 @@ class CommentSenseDashboard:
         """Render spam and bot detection results"""
         st.markdown("## Spam & Bot Detection")
         
-        # Get spam/bot data from composite_kpi -> all_module_results
-        composite_kpi = self._safe_get_results('composite_kpi', {})
-        if composite_kpi and composite_kpi.get('status') == 'success':
+        # Get spam/bot data using enhanced module data retrieval
+        spam_data = self._get_module_data('spam_bot_detection')  # This will find spam_bot_analysis via alternative names
+        
+        if spam_data is None or (isinstance(spam_data, dict) and not spam_data):
+            # Direct check for spam_bot_analysis
+            composite_kpi = self._safe_get_results('composite_kpi', {})
             all_module_results = composite_kpi.get('all_module_results', {})
             spam_data = all_module_results.get('spam_bot_analysis', {})
-        else:
-            # Fallback to direct access
-            all_results = self._safe_get_results('all_module_results', {})
-            spam_data = all_results.get('spam_bot_analysis', {})
         
         # Check if there's an error
         if isinstance(spam_data, dict) and 'error' in spam_data:
@@ -1452,6 +2152,92 @@ class CommentSenseDashboard:
             st.info("Spam and bot detection data not available")
             if spam_data and spam_data.get('error'):
                 st.error(f"Error: {spam_data['error']}")
+    
+    def _show_emotion_stats(self, emotion_data):
+        """Show emotion statistics for detailed results"""
+        if not emotion_data:
+            return
+            
+        emotions = {}
+        sentiments = {}
+        sarcasm_count = 0
+        
+        for item in emotion_data:
+            if isinstance(item, dict):
+                # Count dominant emotions
+                dominant = item.get('dominant_emotion', 'unknown')
+                emotions[dominant] = emotions.get(dominant, 0) + 1
+                
+                # Count sentiments
+                sentiment = item.get('sentiment', 'unknown')
+                sentiments[sentiment] = sentiments.get(sentiment, 0) + 1
+                
+                # Count sarcasm
+                if item.get('is_sarcastic', False):
+                    sarcasm_count += 1
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Sarcastic Comments", sarcasm_count)
+        with col2:
+            most_common_emotion = max(emotions, key=emotions.get) if emotions else "N/A"
+            st.metric("Most Common Emotion", most_common_emotion)
+        with col3:
+            most_common_sentiment = max(sentiments, key=sentiments.get) if sentiments else "N/A"
+            st.metric("Most Common Sentiment", most_common_sentiment)
+    
+    def _show_category_stats(self, category_data):
+        """Show category statistics for detailed results"""
+        if not category_data:
+            return
+            
+        categories = {}
+        subtopics = {}
+        
+        for item in category_data:
+            if isinstance(item, dict):
+                category = item.get('category', 'unknown')
+                categories[category] = categories.get(category, 0) + 1
+                
+                subtopic = item.get('subtopic', 'unknown')
+                subtopics[subtopic] = subtopics.get(subtopic, 0) + 1
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Categories", len(categories))
+            if categories:
+                st.write("**Top Categories:**")
+                sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)[:3]
+                for cat, count in sorted_cats:
+                    st.write(f"• {cat}: {count}")
+        
+        with col2:
+            st.metric("Total Subtopics", len(subtopics))
+            if subtopics:
+                st.write("**Top Subtopics:**")
+                sorted_subs = sorted(subtopics.items(), key=lambda x: x[1], reverse=True)[:3]
+                for sub, count in sorted_subs:
+                    st.write(f"• {sub}: {count}")
+    
+    def _show_persona_stats(self, persona_data):
+        """Show persona statistics for detailed results"""
+        if not persona_data:
+            return
+            
+        clusters = {}
+        
+        for item in persona_data:
+            if isinstance(item, dict):
+                cluster = item.get('cluster', 'unknown')
+                clusters[cluster] = clusters.get(cluster, 0) + 1
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Clusters", len(clusters))
+        with col2:
+            if clusters:
+                largest_cluster = max(clusters, key=clusters.get)
+                st.metric("Largest Cluster", f"{largest_cluster} ({clusters[largest_cluster]} users)")
     
     def run(self):
         """Run the dashboard"""

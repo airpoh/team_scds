@@ -4,11 +4,11 @@ Crisis Detection (Early Warning) System
 Real-time detection of sudden negative sentiment spikes and risky content patterns.
 Uses change-point detection algorithms to identify anomalous patterns in comment streams.
 """
-
+import os
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings("ignore")
@@ -18,7 +18,9 @@ import numpy as np
 from dataclasses import dataclass
 from collections import deque, defaultdict
 from abc import ABC, abstractmethod
+from .common import load_config
 
+    
 # Core libraries
 try:
     import ruptures as rpt
@@ -454,8 +456,15 @@ class CrisisDetectionSystem:
     """Main crisis detection system combining all detection methods"""
     
     def __init__(self, config_path: Optional[str] = None):
-        self.config_path = config_path or Path(__file__).parent.parent / "config" / "crisis_config.json"
-        self.config = self._load_config()
+        # Use the enhanced load_config from common module
+        if isinstance(config_path, dict):
+            # Config passed as dict directly
+            self.config = load_config(config_path, self._get_default_config_dict())
+            self.config_path = None
+        else:
+            # Config path passed as string/Path or None
+            self.config_path = config_path or Path(__file__).parent.parent / "config" / "crisis_config.json"
+            self.config = load_config(self.config_path, self._get_default_config_dict())
         
         # Initialize components
         self.sentiment_monitor = SentimentMonitor(self.config)
@@ -466,59 +475,12 @@ class CrisisDetectionSystem:
         self.alert_cooldown = {}
         self.alert_manager = ConsoleAlertManager()  # Default alert manager
         
-    def _load_config(self) -> Dict[str, Any]:
-        """Load crisis detection configuration"""
-        try:
-            # Load default config first
-            default_config = self._load_default_config()
-            
-            # Try to load user config and merge with default
-            if self.config_path.exists():
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    user_config = json.load(f)
-                return self._merge_configs(default_config, user_config)
-            else:
-                logger.info(f"Config file not found, using default: {self.config_path}")
-                return default_config
-                
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in config file: {e}")
-            return self._load_default_config()
-        except Exception as e:
-            logger.error(f"Unexpected error loading config: {e}")
-            return self._load_default_config()
-    
-    def _load_default_config(self) -> Dict[str, Any]:
-        """Load default configuration from file or use hardcoded fallback"""
-        default_config_path = Path(__file__).parent.parent / "config" / "default_crisis_config.json"
-        
-        try:
-            if default_config_path.exists():
-                with open(default_config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            logger.warning(f"Could not load default config from file: {e}")
-            
-        return self._get_hardcoded_default_config()
-    
-    def _merge_configs(self, default: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-        """Recursively merge user config with default config"""
-        result = default.copy()
-        
-        for key, value in user.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._merge_configs(result[key], value)
-            else:
-                result[key] = value
-                
-        return result
-    
-    def _get_hardcoded_default_config(self) -> Dict[str, Any]:
-        """Get default configuration"""
+    def _get_default_config_dict(self) -> Dict[str, Any]:
+        """Get default configuration as dictionary"""
         return {
             "sentiment_monitoring": {
                 "window_size": 50,
-                "change_point_model": "rbf",
+                "change_point_model": "rbf", 
                 "min_segment_size": 10,
                 "thresholds": {
                     "negative_threshold": -0.6,
@@ -532,18 +494,20 @@ class CrisisDetectionSystem:
                 "ngram_range": [1, 2],
                 "keyword_window_size": 20,
                 "keywords": {
-                    "violence": ["kill", "die", "hurt", "attack", "fight", "blood"],
-                    "hate_speech": ["hate", "stupid", "idiot", "worthless", "disgusting"],
-                    "self_harm": ["suicide", "kill myself", "end it", "worthless"],
+                    "violence": ["kill", "die", "hurt", "attack", "fight"],
+                    "hate_speech": ["hate", "stupid", "idiot", "worthless"], 
+                    "self_harm": ["suicide", "kill myself", "end it"],
                     "harassment": ["harass", "bully", "threaten", "stalk"],
-                    "extremism": ["radical", "extreme", "fanatic"]
+                    "extremism": ["radical", "extreme", "fanatic"],
+                    "toxic_behavior": ["toxic", "cancel", "brigade"]
                 },
                 "category_weights": {
-                    "violence": 2.0,
-                    "hate_speech": 1.5,
-                    "self_harm": 3.0,
-                    "harassment": 1.8,
-                    "extremism": 2.5
+                    "violence": 3.0,
+                    "hate_speech": 2.0, 
+                    "self_harm": 4.0,
+                    "harassment": 2.5,
+                    "extremism": 3.5,
+                    "toxic_behavior": 1.8
                 },
                 "thresholds": {
                     "keyword_spike_zscore": 2.0,
@@ -555,9 +519,35 @@ class CrisisDetectionSystem:
             "system": {
                 "max_alert_history": 1000,
                 "alert_cooldown_minutes": 30,
-                "min_severity_threshold": 0.3
+                "min_severity_threshold": 0.3,
+                "enable_clustering": True,
+                "enable_trend_analysis": True,
+                "data_retention_days": 30
             }
         }
+    
+    
+    
+    def batch_analyze(self, comments: List[str], batch_size: int = None) -> Dict[str, Any]:
+        """
+        Analyze multiple comments for crisis patterns with batch processing support.
+        
+        This method provides interface consistency with other analysis modules.
+        
+        Args:
+            comments: List of comment texts to analyze
+            batch_size: Number of comments to process per batch (unused for crisis detection)
+            
+        Returns:
+            Dictionary containing crisis analysis results
+        """
+        # Convert comments list to DataFrame format expected by analyze_crisis_patterns
+        comments_df = pd.DataFrame({
+            'textOriginal': comments,
+            'publishedAt': [datetime.now() - timedelta(minutes=i) for i in range(len(comments))]
+        })
+        
+        return self.analyze_crisis_patterns(comments_df)
     
     def analyze_crisis_patterns(self, comments_data: pd.DataFrame) -> Dict[str, Any]:
         """Analyze crisis patterns in comment data"""

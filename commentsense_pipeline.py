@@ -11,6 +11,7 @@ Integrates all analysis modules to provide comprehensive comment insights:
 import json
 import logging
 import warnings
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
@@ -158,6 +159,7 @@ from modules.visual_emoji_analysis import VisualEmojiAnalyzer
 from modules.multilingual_analysis import MultilingualSentimentAnalyzer
 from modules.crisis_detection import CrisisDetectionSystem
 from modules.network_analysis import NetworkAnalyzer
+from modules.category_classification import CategoryClassifier
 from modules.persona_clustering import PersonaClustering
 
 # Import new advanced modules
@@ -229,6 +231,45 @@ def run_network_analysis_worker_wrapper(comments_df_dict):
         return analyzer.analyze_network(comments_df)
     except Exception as e:
         logger.error(f"Error in network_analysis worker: {e}")
+        return {"error": str(e)}
+
+def run_category_classification_worker(comments_list):
+    """Worker function for category classification"""
+    try:
+        import pandas as pd
+        from modules.category_classification import CategoryClassifier
+        classifier = CategoryClassifier()
+        # Create DataFrame with 'text' column as expected by the module
+        category_df = pd.DataFrame({'text': comments_list})
+        return classifier.analyze_categories(category_df)
+    except Exception as e:
+        logger.error(f"Error in category_classification worker: {e}")
+        return {"error": str(e)}
+
+def run_persona_clustering_worker(comments_df_dict):
+    """Worker function for persona clustering"""
+    try:
+        import pandas as pd
+        from modules.persona_clustering import PersonaClustering
+        clusterer = PersonaClustering()
+        comments_df = pd.DataFrame(comments_df_dict)
+        
+        # Create DataFrame with 'text' and 'user_id' columns as expected by the module
+        persona_df = pd.DataFrame({
+            'text': comments_df['textOriginal'].fillna('') if 'textOriginal' in comments_df.columns else comments_df.get('text', ''),
+            'user_id': comments_df['user_id'] if 'user_id' in comments_df.columns else comments_df.get('authorId', range(len(comments_df)))
+        })
+        
+        # Create minimal category DataFrame since we don't have category results in parallel mode
+        cats_df = pd.DataFrame({
+            'text': persona_df['text'], 
+            'category': 'general',
+            'user_id': persona_df['user_id']
+        })
+        
+        return clusterer.analyze_personas(persona_df, cats_df)
+    except Exception as e:
+        logger.error(f"Error in persona_clustering worker: {e}")
         return {"error": str(e)}
 
 class CommentSensePipeline:
@@ -324,6 +365,10 @@ class CommentSensePipeline:
                 module = CrisisDetectionSystem()
             elif module_name == 'network_analysis':
                 module = NetworkAnalyzer()
+            elif module_name == 'category_classification':
+                module = CategoryClassifier()
+            elif module_name == 'persona_clustering':
+                module = PersonaClustering()
             else:
                 logger.error(f"Unknown module: {module_name}")
                 return None
@@ -393,12 +438,7 @@ class CommentSensePipeline:
             else:
                 results['module_results'] = self._process_sequential(comments_df, videos_df)
             
-            # Generate aggregated insights
-            results['aggregated_insights'] = self._generate_insights(
-                results['module_results'], comments_df, videos_df
-            )
-            
-            # Generate Composite KPI (if available)
+            # Generate Composite KPI first (if available)
             if COMPOSITE_KPI_AVAILABLE:
                 try:
                     composite_kpi_system = CompositeKPISystem()
@@ -408,6 +448,11 @@ class CommentSensePipeline:
                 except Exception as e:
                     logger.error(f"Composite KPI calculation failed: {e}")
                     results['composite_kpi'] = {"error": str(e)}
+            
+            # Generate aggregated insights (now with access to composite_kpi data)
+            results['aggregated_insights'] = self._generate_insights(
+                results, comments_df, videos_df  # Pass complete results instead of just module_results
+            )
             
             # Update processing stats
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -499,16 +544,83 @@ class CommentSensePipeline:
                 module_results['crisis_detection'] = {"error": str(e)}
         
         # Network Analysis
-        if 'network_analysis' in self.modules:
+        network_module = self._get_module('network_analysis')
+        if network_module is not None:
             try:
                 logger.info("Running network analysis...")
-                network_results = self.modules['network_analysis'].analyze_network(
-                    comments_df
-                )
+                network_results = network_module.analyze_network(comments_df)
                 module_results['network_analysis'] = network_results
+                gc.collect()
             except Exception as e:
                 logger.error(f"Network Analysis module error: {e}")
                 module_results['network_analysis'] = {"error": str(e)}
+        
+        # Category Classification
+        category_module = self._get_module('category_classification')
+        if category_module is not None:
+            try:
+                logger.info("Running category classification...")
+                # Create DataFrame with 'text' column as expected by the module
+                category_df = pd.DataFrame({'text': comments_df['textOriginal'].fillna('')})
+                category_results = category_module.analyze_categories(category_df)
+                module_results['category_classification'] = category_results
+                gc.collect()
+            except Exception as e:
+                logger.error(f"Category Classification module error: {e}")
+                module_results['category_classification'] = {"error": str(e)}
+        
+        # Persona Clustering (requires category results)
+        persona_module = self._get_module('persona_clustering')
+        if persona_module is not None:
+            try:
+                logger.info("Running persona clustering...")
+                # Create DataFrame with 'text' and 'user_id' columns as expected by the module
+                persona_df = pd.DataFrame({
+                    'text': comments_df['textOriginal'].fillna(''),
+                    'user_id': comments_df['user_id']
+                })
+                
+                # Use category results if available, otherwise create empty DataFrame
+                if 'category_classification' in module_results:
+                    cat_result = module_results['category_classification']
+                    if isinstance(cat_result, pd.DataFrame):
+                        cats_df = cat_result.copy()
+                        # Ensure cats_df has user_id column
+                        if 'user_id' not in cats_df.columns and 'user_id' in comments_df.columns:
+                            cats_df['user_id'] = comments_df['user_id'].iloc[:len(cats_df)]
+                    elif isinstance(cat_result, dict) and not cat_result.get('error'):
+                        # Handle dict results (shouldn't happen, but just in case)
+                        cats_df = pd.DataFrame({
+                            'text': comments_df['textOriginal'].fillna(''), 
+                            'category': 'general',
+                            'user_id': comments_df['user_id']
+                        })
+                    else:
+                        # Error case
+                        cats_df = pd.DataFrame({
+                            'text': comments_df['textOriginal'].fillna(''), 
+                            'category': 'general',
+                            'user_id': comments_df['user_id']
+                        })
+                else:
+                    # Create minimal category DataFrame if not available
+                    cats_df = pd.DataFrame({
+                        'text': comments_df['textOriginal'].fillna(''), 
+                        'category': 'general',
+                        'user_id': comments_df['user_id']
+                    })
+                
+                # Double check that cats_df has user_id column
+                if 'user_id' not in cats_df.columns:
+                    logger.warning("Adding missing user_id column to cats_df")
+                    cats_df['user_id'] = comments_df['user_id'].iloc[:len(cats_df)]
+                
+                persona_results = persona_module.analyze_personas(persona_df, cats_df)
+                module_results['persona_clustering'] = persona_results
+                gc.collect()
+            except Exception as e:
+                logger.error(f"Persona Clustering module error: {e}")
+                module_results['persona_clustering'] = {"error": str(e)}
         
         return module_results
     
@@ -544,6 +656,12 @@ class CommentSensePipeline:
             if 'network_analysis' in self.modules:
                 futures['network_analysis'] = executor.submit(run_network_analysis_worker_wrapper, comments_df_dict)
             
+            if 'category_classification' in self.modules:
+                futures['category_classification'] = executor.submit(run_category_classification_worker, comments_list)
+            
+            if 'persona_clustering' in self.modules:
+                futures['persona_clustering'] = executor.submit(run_persona_clustering_worker, comments_df_dict)
+            
             # Collect results
             for module_name, future in futures.items():
                 try:
@@ -556,15 +674,18 @@ class CommentSensePipeline:
         
         return module_results
     
-    def _generate_insights(self, module_results: Dict[str, Any], 
+    def _generate_insights(self, all_results: Dict[str, Any], 
                           comments_df: pd.DataFrame,
                           videos_df: Optional[pd.DataFrame]) -> Dict[str, Any]:
         """Generate aggregated insights from all module results"""
         
+        # Extract module_results for backward compatibility with other methods
+        module_results = all_results.get('module_results', {})
+        
         insights = {
             "overall_sentiment": self._calculate_overall_sentiment(module_results),
             "dominant_emotions": self._extract_dominant_emotions(module_results),
-            "language_distribution": self._get_language_distribution(module_results),
+            "language_distribution": self._get_language_distribution(all_results),  # Pass complete results
             "crisis_summary": self._summarize_crisis_alerts(module_results),
             "emoji_sentiment": self._summarize_emoji_sentiment(module_results),
             "network_analysis": self._summarize_network_analysis(module_results),
@@ -651,17 +772,37 @@ class CommentSensePipeline:
         
         return {}
     
-    def _get_language_distribution(self, module_results: Dict[str, Any]) -> Dict[str, int]:
+    def _get_language_distribution(self, all_results: Dict[str, Any]) -> Dict[str, int]:
         """Get language distribution from multilingual analysis"""
         
-        if 'multilingual' in module_results and isinstance(module_results['multilingual'], list):
-            multilingual_data = module_results['multilingual']
+        # The parameter name is misleading - it's actually all results including composite_kpi
+        multilingual_data = None
+        
+        # First check if we have multilingual data directly in module_results
+        if 'multilingual' in all_results and isinstance(all_results['multilingual'], list):
+            multilingual_data = all_results['multilingual']
+        # Then check composite_kpi results (this is where the data actually is)
+        elif 'composite_kpi' in all_results and isinstance(all_results['composite_kpi'], dict):
+            composite_kpi = all_results['composite_kpi']
+            if 'all_module_results' in composite_kpi and 'multilingual_analysis' in composite_kpi['all_module_results']:
+                multilingual_data = composite_kpi['all_module_results']['multilingual_analysis']
+        
+        if isinstance(multilingual_data, list) and len(multilingual_data) > 0:
             lang_counts = {}
             
             for result in multilingual_data:
                 if isinstance(result, dict) and 'language' in result:
                     lang = result['language']
+                    # Include all languages, even 'unknown', 'short', 'und'
                     if lang:
+                        lang_counts[lang] = lang_counts.get(lang, 0) + 1
+            
+            # If we have results but no language counts, count 'unknown' languages
+            if not lang_counts and multilingual_data:
+                for result in multilingual_data:
+                    if isinstance(result, dict):
+                        # Check for any language-related keys
+                        lang = result.get('language') or result.get('detected_language') or 'unknown'
                         lang_counts[lang] = lang_counts.get(lang, 0) + 1
             
             return lang_counts
@@ -966,6 +1107,17 @@ class CommentSensePipeline:
     def _save_results(self, results: Dict[str, Any]):
         """Save analysis results to file"""
         
+        def json_serializer(obj):
+            """Custom JSON serializer for DataFrames and other objects"""
+            if pd and hasattr(obj, 'to_dict'):  # DataFrame
+                return obj.to_dict('records')  # Convert DataFrame to list of dicts
+            elif hasattr(obj, 'tolist'):  # numpy arrays
+                return obj.tolist()
+            elif hasattr(obj, '__dict__'):  # Custom objects
+                return obj.__dict__
+            else:
+                return str(obj)
+        
         try:
             output_config = self.config.get('output', {})
             results_dir = Path(output_config.get('results_directory', 'results'))
@@ -976,7 +1128,7 @@ class CommentSensePipeline:
             filepath = results_dir / filename
             
             with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+                json.dump(results, f, indent=2, ensure_ascii=False, default=json_serializer)
             
             logger.info(f"Results saved to: {filepath}")
             
@@ -1021,6 +1173,11 @@ def load_datasets(comments_files: List[str], videos_file: Optional[str] = None) 
     
     # Combine all comment dataframes
     comments_df = pd.concat(all_comments, ignore_index=True)
+    
+    # Rename columns to match expected names
+    if 'authorId' in comments_df.columns and 'user_id' not in comments_df.columns:
+        comments_df = comments_df.rename(columns={'authorId': 'user_id'})
+        logger.info("Renamed 'authorId' column to 'user_id' for persona clustering compatibility")
     
     # Load videos if provided
     videos_df = None

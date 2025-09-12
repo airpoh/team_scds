@@ -178,9 +178,16 @@ class CompositeKPISystem:
         # Initialize existing modules
         if EXISTING_MODULES:
             try:
-                self.emotion_detector = EmotionSarcasmDetector(
-                    self.config.get("module_configs", {}).get("emotion_sarcasm", {})
-                )
+                # EmotionSarcasmDetector expects a config file path, not a dict
+                emotion_config = self.config.get("module_configs", {}).get("emotion_sarcasm", {})
+                emotion_config_path = None
+                if isinstance(emotion_config, str):
+                    emotion_config_path = emotion_config
+                elif isinstance(emotion_config, dict) and "config_path" in emotion_config:
+                    emotion_config_path = emotion_config["config_path"]
+                # If no specific config path, let the module use its default
+                
+                self.emotion_detector = EmotionSarcasmDetector(config_path=emotion_config_path)
                 self.module_status["emotion_detector"] = "initialized"
                 logger.info("Emotion & Sarcasm detector initialized")
             except Exception as e:
@@ -188,9 +195,16 @@ class CompositeKPISystem:
                 self.module_status["emotion_detector"] = f"failed: {e}"
             
             try:
-                self.emoji_analyzer = VisualEmojiAnalyzer(
-                    self.config.get("module_configs", {}).get("visual_emoji", {})
-                )
+                # VisualEmojiAnalyzer expects a config file path, not a dict
+                emoji_config = self.config.get("module_configs", {}).get("visual_emoji", {})
+                emoji_config_path = None
+                if isinstance(emoji_config, str):
+                    emoji_config_path = emoji_config
+                elif isinstance(emoji_config, dict) and "config_path" in emoji_config:
+                    emoji_config_path = emoji_config["config_path"]
+                # If no specific config path, let the module use its default
+                
+                self.emoji_analyzer = VisualEmojiAnalyzer(config_path=emoji_config_path)
                 self.module_status["emoji_analyzer"] = "initialized"
                 logger.info("Visual & Emoji analyzer initialized")
             except Exception as e:
@@ -198,9 +212,16 @@ class CompositeKPISystem:
                 self.module_status["emoji_analyzer"] = f"failed: {e}"
             
             try:
-                self.multilingual_analyzer = MultilingualSentimentAnalyzer(
-                    self.config.get("module_configs", {}).get("multilingual", {})
-                )
+                # MultilingualSentimentAnalyzer expects a config file path, not a dict
+                multilingual_config = self.config.get("module_configs", {}).get("multilingual", {})
+                multilingual_config_path = None
+                if isinstance(multilingual_config, str):
+                    multilingual_config_path = multilingual_config
+                elif isinstance(multilingual_config, dict) and "config_path" in multilingual_config:
+                    multilingual_config_path = multilingual_config["config_path"]
+                # If no specific config path, let the module use its default
+                
+                self.multilingual_analyzer = MultilingualSentimentAnalyzer(config_path=multilingual_config_path)
                 self.module_status["multilingual_analyzer"] = "initialized"
                 logger.info("Multilingual analyzer initialized")
             except Exception as e:

@@ -78,7 +78,14 @@ except Exception:
     BERTopic = None
 
 # ---------------- Domain Categories ----------------
-CATEGORIES = ["skincare", "makeup", "fragrance", "haircare", "body care"]
+CATEGORIES = [
+    "skincare and beauty products", 
+    "makeup and cosmetics", 
+    "fragrance and perfume", 
+    "haircare and hair products", 
+    "body care and lotions",
+    "other or unrelated content"
+]
 
 CATEGORY_KW = {
     "skincare": ["serum","toner","cleanser","moisturizer","skin","retinol","hyaluronic","acne","spf","sunscreen"],
@@ -86,6 +93,7 @@ CATEGORY_KW = {
     "fragrance":["perfume","fragrance","eau de","scent","parfum","toilette","cologne"],
     "haircare": ["shampoo","conditioner","hair","curl","frizz","keratin","scalp","split ends"],
     "body care":["body","lotion","hand cream","shower","soap","butter","scrub"],
+    "other": []  # No specific keywords - catch-all category
 }
 
 SUBTOPIC_KW = {
@@ -116,6 +124,9 @@ SUBTOPIC_KW = {
         "lotion":["lotion","body cream","butter"],
         "wash":  ["body wash","shower gel","soap"],
         "scrub": ["scrub","exfoliate","exfoliation"],
+    },
+    "other": {
+        "unrelated": ["general", "other", "unrelated", "off-topic"]
     },
 }
 
@@ -161,10 +172,16 @@ class CategoryClassifier:
                     model=model_name,
                     device=HF_DEVICE,
                     model_kwargs={
-                        'torch_dtype': HF_DTYPE or torch.float32,
+                        'dtype': HF_DTYPE or torch.float32,
                         'device_map': None,  # Disable device mapping to prevent meta tensors
                         'low_cpu_mem_usage': False,  # Disable to prevent meta tensors
-                    }
+                    },
+                    tokenizer_kwargs={
+                        'padding': "max_length",
+                        'truncation': True,
+                        'max_length': 128,
+                    },
+
                 )
             logger.info(f"Loaded zero-shot classifier: {model_name}")
         
@@ -220,16 +237,32 @@ class CategoryClassifier:
         
         return self._sbert_model
     
+    def _map_expanded_label(self, expanded_label: str) -> str:
+        """Map expanded category labels back to simple categories"""
+        label_mapping = {
+            "skincare and beauty products": "skincare",
+            "makeup and cosmetics": "makeup", 
+            "fragrance and perfume": "fragrance",
+            "haircare and hair products": "haircare",
+            "body care and lotions": "body care",
+            "other or unrelated content": "other"
+        }
+        return label_mapping.get(expanded_label, expanded_label)
+    
     def assign_category_heuristic(self, text: str) -> str:
         """Assign category using keyword heuristics"""
         t = (text or "").lower()
-        counts = {c: 0 for c in CATEGORIES}
+        simple_categories = ["skincare", "makeup", "fragrance", "haircare", "body care", "other"]
+        counts = {c: 0 for c in simple_categories}
         for c, kws in CATEGORY_KW.items():
+            if c == "other":  # Skip "other" category for keyword matching
+                continue
             for w in kws:
                 if w in t:
                     counts[c] += 1
         cat = max(counts, key=counts.get)
-        return cat if counts[cat] > 0 else "general"
+        # If no keywords match, classify as "other"
+        return cat if counts[cat] > 0 else "other"
     
     def assign_subtopic(self, text: str, category: str) -> str:
         """Assign subtopic within a category"""
@@ -272,14 +305,51 @@ class CategoryClassifier:
         # Process in batches
         for i in range(0, len(unique_texts), batch_size):
             chunk = unique_texts[i:i+batch_size]
-            results = pipe(chunk, candidate_labels=CATEGORIES, multi_label=False)
+            # Filter out empty texts and track indices
+            valid_chunk = []
+            empty_indices = []
+            for j, text in enumerate(chunk):
+                if text and text.strip():
+                    valid_chunk.append(text)
+                else:
+                    empty_indices.append(j)
+            
+            if not valid_chunk or not CATEGORIES:
+                # Use heuristic fallback for all texts in chunk
+                for text in chunk:
+                    pred_u.append(self.assign_category_heuristic(text))
+                    conf_u.append(0.5)  # Default confidence
+                continue
+                
+            results = pipe(valid_chunk, candidate_labels=CATEGORIES, multi_label=False)
             
             if isinstance(results, dict):
                 results = [results]
             
-            for r in results:
-                pred_u.append(r["labels"][0].lower())
-                conf_u.append(float(r["scores"][0]))
+            # Process results for valid texts and add fallback for empty texts
+            result_idx = 0
+            for j, text in enumerate(chunk):
+                if j in empty_indices:
+                    # Use heuristic for empty text
+                    pred_u.append(self.assign_category_heuristic(text))
+                    conf_u.append(0.5)
+                else:
+                    # Use zero-shot result
+                    r = results[result_idx]
+                    raw_label = r["labels"][0].lower()
+                    confidence_score = float(r["scores"][0])
+                    
+                    # Apply confidence threshold - if too low, classify as "other"
+                    CONFIDENCE_THRESHOLD = 0.4  # Adjust this value as needed
+                    if confidence_score < CONFIDENCE_THRESHOLD:
+                        pred_u.append("other")
+                        conf_u.append(confidence_score)
+                    else:
+                        # Map expanded labels back to simple categories
+                        mapped_label = self._map_expanded_label(raw_label)
+                        pred_u.append(mapped_label)
+                        conf_u.append(confidence_score)
+                    result_idx += 1
         
         # Map back to original order
         predictions = [pred_u[i] for i in map_idx]

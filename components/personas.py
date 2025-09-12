@@ -2,7 +2,7 @@ import streamlit as st, pandas as pd
 import plotly.express as px
 
 def render(personas_df: pd.DataFrame):
-    st.subheader("🧑‍🤝‍🧑 Personas")
+    st.subheader(" Personas")
     st.dataframe(personas_df, width="stretch")  # was use_container_width=True
     pc = (personas_df["persona_label"]
           .value_counts()

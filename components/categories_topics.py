@@ -2,7 +2,7 @@ import streamlit as st, pandas as pd
 import plotly.express as px
 
 def render(cats_out: pd.DataFrame):
-    st.subheader("🧩 Categories & Sub-Topics")
+    st.subheader(" Categories & Sub-Topics")
     min_score = st.slider("Min category confidence", 0.0, 1.0, 0.0, 0.05)
     view = cats_out[cats_out["category_score"] >= min_score]
     st.dataframe(view, width="stretch")  # was use_container_width=True
