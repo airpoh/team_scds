@@ -212,6 +212,7 @@ The pipeline integrates state-of-the-art NLP models including transformer-based 
 1. Clone or download the CommentSense repository
 2. Create and activate the conda environment
 3. Install dependencies as shown above ( pip install -r requirements.txt)
-4. Prepare your comment datasets in CSV format
-5. Configure the system using the provided configuration files
-6. Run dashboard ( streamlit run streamlit_dashboard.py )
+4. Create folder 'Results' and folder 'Data'
+5. Prepare your comment datasets in CSV format
+6. Configure the system using the provided configuration files
+7. Run dashboard ( streamlit run streamlit_dashboard.py )
