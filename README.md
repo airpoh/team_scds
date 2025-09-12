@@ -2,13 +2,25 @@
 
 CommentSense is a comprehensive AI-powered system designed for analyzing YouTube comments at scale. It integrates multiple machine learning modules to provide deep insights into sentiment, user behavior, community dynamics, and content quality. The system is particularly optimized for social media comment analysis in multilingual environments.
 
+
 ## Table of Contents
 
+- [Setup](#setup)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)
 - [Module Descriptions](#module-descriptions)
-- [Setup](#setup)
+
+
+### Setup
+
+1. Clone or download the CommentSense repository
+2. Create and activate the conda environment
+3. Install dependencies as shown above ( pip install -r requirements.txt)
+4. Create folder 'results' and folder 'dataset'
+5. Prepare your comment datasets in CSV format ( comment1 ~ comment5 )
+6. Configure the system using the provided configuration files
+7. Run dashboard ( streamlit run streamlit_dashboard.py )
 
 ## Overview
 
@@ -206,13 +218,3 @@ The pipeline integrates state-of-the-art NLP models including transformer-based 
 - Comprehensive performance metrics
 
 **Why It's Essential**: Decision-makers need a single, interpretable metric to gauge overall engagement health while maintaining access to detailed breakdowns when needed.
-
-### Setup
-
-1. Clone or download the CommentSense repository
-2. Create and activate the conda environment
-3. Install dependencies as shown above ( pip install -r requirements.txt)
-4. Create folder 'Results' and folder 'Data'
-5. Prepare your comment datasets in CSV format
-6. Configure the system using the provided configuration files
-7. Run dashboard ( streamlit run streamlit_dashboard.py )
