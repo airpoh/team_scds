@@ -444,9 +444,12 @@ class PersonaClustering:
         
         personas["persona_label"] = personas.apply(create_persona_label, axis=1)
         
+        # Add persona_cluster column (fallback uses -1 for no cluster)
+        personas["persona_cluster"] = -1
+        
         # Select and order columns
         columns = [
-            "user_id", "persona_label", "dominant_category", "top_subtopic",
+            "user_id", "persona_label", "persona_cluster", "dominant_category", "top_subtopic",
             "dominant_sentiment", "engagement_tier", "comment_count", 
             "avg_likes", "total_likes"
         ]
@@ -517,12 +520,11 @@ class PersonaClustering:
         # Create base personas using heuristics
         base_personas = self.create_heuristic_personas(df, cats_df)
         
-        # Add cluster information
-        base_personas["persona_cluster"] = (base_personas["user_id"]
-                                          .astype(str)
-                                          .map(user_cluster_map)
-                                          .fillna(-1)
-                                          .astype(int))
+        # Add cluster information - update only users with valid clusters
+        for user_id, cluster_id in user_cluster_map.items():
+            if cluster_id >= 0:  # Only update valid clusters
+                mask = base_personas["user_id"].astype(str) == str(user_id)
+                base_personas.loc[mask, "persona_cluster"] = cluster_id
         
         # Merge cluster terms and examples
         base_personas = base_personas.merge(cluster_terms_df, on="persona_cluster", how="left")
