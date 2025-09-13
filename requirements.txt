@@ -31,9 +31,6 @@ pyahocorasick>=2.0.0
 streamlit>=1.25.0
 plotly>=5.15.0
 
-# (Removed fasttext; code disables it by default)
-fasttext>=0.9.2
-
 # Image processing (for emoji/image analysis)
 Pillow>=9.5.0
 # consider headless in servers:
