@@ -14,7 +14,7 @@ CommentSense is a comprehensive AI-powered system designed for analyzing YouTube
 
 ### Setup
 
-1. Open VS Code terminal, clone CommentSense repository [git clone https://github.com/airpoh/team_scds.git]
+1. Open VS Code terminal, Create a folder and clone CommentSense repository [git clone https://github.com/airpoh/team_scds.git]
 2. Install Python 3.11 【https://www.python.org/downloads/release/python-3110/】
 3. Create a virtual environment (Ctrl+Shift+P → Python: Create Environment → Conda) [conda create -n commentsense python=3.11 -y]
 4. Activate the conda [conda activate commentsense]
