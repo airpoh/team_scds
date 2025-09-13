@@ -20,7 +20,7 @@ CommentSense is a comprehensive AI-powered system designed for analyzing YouTube
 4. Activate the conda [conda activate commentsense]
 5. Tell VS Code to use this venv (Ctrl+Shift+P → Python: Select Interpreter) [Anaconda3\envs\commentsense\python.exe (3.11)]
 6. Install dependencies [python -m pip install --upgrade pip wheel, python -m pip install -r requirements.txt]
-7. Create folder 'results' and folder 'dataset' in team_scds
+7. Create folder 'dataset' in team_scds
 8. Prepare your comment datasets in CSV format (e.g., comment1.csv ~ comment5.csv) inside dataset/
 9. Configure the system using the provided configuration files
 10. Run dashboard [streamlit run streamlit_dashboard.py]
